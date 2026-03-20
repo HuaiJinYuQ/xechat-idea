@@ -31,3 +31,9 @@ build
 *.iws
 *.iml
 *.ipr
+
+# Node.js
+node_modules/
+dist/
+.trae
+

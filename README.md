@@ -91,6 +91,9 @@
 │   ├── gradlew.bat
 │   ├── settings.gradle
 │   └── src
+├── xechat-plugin-vscode //VSCode/Trae 插件端
+│   ├── package.json
+│   └── src
 └── xechat-server //服务端
     ├── pom.xml
     └── src
@@ -108,12 +111,18 @@
 * JDK11
 * Gradle 6.x
 
+**VSCode/Trae 插件端**
+
+* Node.js 20+
+* TypeScript 5.x
+
 ### 项目开发
 
 * [实现一个自定义命令](https://xeblog.cn/articles/79)
 * [实现一个自定义消息](https://xeblog.cn/articles/100)
 * [实现一个联机对战游戏](https://xeblog.cn/articles/95)
 * [WebSocket协议接入文档](https://xeblog.cn/articles/112)
+* [VSCode/Trae 跨端使用与迁移说明](./xechat-plugin-vscode/README.md)
 
 ## 运行 & 部署
 

@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.jetbrains.intellij' version '0.7.2'
+    id 'org.jetbrains.intellij' version '1.17.4'
 }
 
 group 'cn.xeblog'
@@ -21,12 +21,12 @@ repositories {
 
 ext {
     xechatCommonsVersion = '1.6.7-beta'
-    lombokVersion = '1.18.24'
+    lombokVersion = '1.18.38'
 }
 
 dependencies {
-    testCompile group: 'junit', name: 'junit', version: '4.12'
-    compile "cn.xeblog:xechat-commons:$rootProject.xechatCommonsVersion"
+    testImplementation group: 'junit', name: 'junit', version: '4.12'
+    implementation "cn.xeblog:xechat-commons:$rootProject.xechatCommonsVersion"
     compileOnly "org.projectlombok:lombok:$rootProject.lombokVersion"
     annotationProcessor "org.projectlombok:lombok:$rootProject.lombokVersion"
     testCompileOnly "org.projectlombok:lombok:$rootProject.lombokVersion"
@@ -35,11 +35,11 @@ dependencies {
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
-    version '2021.3'
-    intellij.updateSinceUntilBuild false
+    version.set('2021.3')
+    updateSinceUntilBuild.set(false)
 }
 patchPluginXml {
-    sinceBuild(191)
+    sinceBuild.set('191')
 }
 
 tasks.withType(JavaCompile) {
