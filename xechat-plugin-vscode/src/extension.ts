@@ -1,4 +1,5 @@
 import * as crypto from "crypto";
+import * as path from "path";
 import * as vscode from "vscode";
 import WebSocket from "ws";
 
@@ -38,14 +39,184 @@ let reconnectTimer: NodeJS.Timeout | undefined;
 let reconnectAttempt = 0;
 let lastConnected = false;
 let extensionContext: vscode.ExtensionContext;
+let currentStatusState = "idle";
+let currentStatusContent = "未连接";
+const disabledGameCommandPrefixes = ["#showGame", "#play", "#join", "#over"];
 
 export function activate(context: vscode.ExtensionContext): void {
   extensionContext = context;
-  context.subscriptions.push(
-    vscode.commands.registerCommand("xechat.openChat", () => {
-      openPanel(context);
-    })
-  );
+  const commandHandlers: Array<[string, () => void | Promise<void>]> = [
+    [
+      "xechat.openChat",
+      () => {
+        openPanel(context);
+      }
+    ],
+    [
+      "xechat.connect",
+      () => {
+        ensurePanel(context);
+        appendSystem("执行命令：连接");
+        connect();
+      }
+    ],
+    [
+      "xechat.disconnect",
+      () => {
+        ensurePanel(context);
+        disconnect("执行命令：断开");
+      }
+    ],
+    [
+      "xechat.reconnect",
+      () => {
+        ensurePanel(context);
+        reconnect("执行命令：重连");
+      }
+    ],
+    [
+      "xechat.status",
+      () => {
+        ensurePanel(context);
+        appendSystem(`当前状态：${currentStatusState}，${currentStatusContent}`);
+      }
+    ],
+    [
+      "xechat.openBrowserTool",
+      async () => {
+        ensurePanel(context);
+        notifyUnmigratableTool(
+          "浏览器工具",
+          "内嵌浏览器容器、标签页会话管理",
+          "通过外部浏览器打开网页"
+        );
+        const raw = await vscode.window.showInputBox({
+          prompt: "输入要打开的网址",
+          placeHolder: "https://example.com"
+        });
+        if (!raw || !raw.trim()) {
+          appendSystem("浏览器工具取消：未输入网址");
+          return;
+        }
+        const targetUri = parseWebUri(raw);
+        if (!targetUri) {
+          appendSystem(`浏览器工具失败：无效网址 ${raw}`);
+          return;
+        }
+        const opened = await vscode.env.openExternal(targetUri);
+        appendSystem(opened ? `浏览器工具已打开：${targetUri.toString()}` : "浏览器工具失败：无法调用外部浏览器");
+      }
+    ],
+    [
+      "xechat.openReadTool",
+      async () => {
+        ensurePanel(context);
+        notifyUnmigratableTool(
+          "阅读工具",
+          "独立阅读器界面、目录与书架联动状态",
+          "读取并打开当前或指定文件"
+        );
+        const mode = await vscode.window.showQuickPick(["读取当前文件", "读取指定路径"], {
+          placeHolder: "选择阅读模式"
+        });
+        if (!mode) {
+          appendSystem("阅读工具取消：未选择模式");
+          return;
+        }
+        if (mode === "读取当前文件") {
+          const editor = vscode.window.activeTextEditor;
+          if (!editor) {
+            appendSystem("阅读工具失败：当前没有打开的编辑器");
+            return;
+          }
+          const preview = getTextPreview(editor.document.getText());
+          appendSystem(`阅读工具已读取：${path.basename(editor.document.fileName)} -> ${preview}`);
+          return;
+        }
+        const inputPath = await vscode.window.showInputBox({
+          prompt: "输入文件路径（支持绝对路径或相对工作区路径）"
+        });
+        if (!inputPath || !inputPath.trim()) {
+          appendSystem("阅读工具取消：未输入路径");
+          return;
+        }
+        const targetPath = resolveFilePath(inputPath.trim());
+        if (!targetPath) {
+          appendSystem("阅读工具失败：当前无工作区，无法解析相对路径");
+          return;
+        }
+        try {
+          const document = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
+          await vscode.window.showTextDocument(document, { preview: false });
+          const preview = getTextPreview(document.getText());
+          appendSystem(`阅读工具已读取：${path.basename(document.fileName)} -> ${preview}`);
+        } catch {
+          appendSystem(`阅读工具失败：无法打开文件 ${targetPath}`);
+        }
+      }
+    ],
+    [
+      "xechat.help",
+      () => {
+        ensurePanel(context);
+        showHelp();
+      }
+    ],
+    [
+      "xechat.sendMessage",
+      async () => {
+        ensurePanel(context);
+        const content = await vscode.window.showInputBox({
+          prompt: "输入要发送的消息",
+          placeHolder: "请输入聊天消息"
+        });
+        if (!content || !content.trim()) {
+          appendSystem("发送取消：消息为空");
+          return;
+        }
+        sendChat(content);
+      }
+    ],
+    [
+      "xechat.gameDisabledInfo",
+      () => {
+        ensurePanel(context);
+        handleDisabledGameCommand();
+      }
+    ],
+    [
+      "xechat.showGame",
+      () => {
+        ensurePanel(context);
+        handleDisabledGameCommand();
+      }
+    ],
+    [
+      "xechat.play",
+      () => {
+        ensurePanel(context);
+        handleDisabledGameCommand();
+      }
+    ],
+    [
+      "xechat.join",
+      () => {
+        ensurePanel(context);
+        handleDisabledGameCommand();
+      }
+    ],
+    [
+      "xechat.overGame",
+      () => {
+        ensurePanel(context);
+        handleDisabledGameCommand();
+      }
+    ]
+  ];
+
+  for (const [command, handler] of commandHandlers) {
+    context.subscriptions.push(vscode.commands.registerCommand(command, handler));
+  }
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
@@ -184,6 +355,13 @@ function reconnect(reason: string): void {
   connect();
 }
 
+function disconnect(reason: string): void {
+  appendSystem(reason);
+  clearReconnectTimer();
+  closeSocket();
+  updateStatus("disconnected", "已手动断开连接");
+}
+
 function scheduleReconnect(): void {
   const settings = getSettings();
   if (!settings.autoReconnect || !panel) {
@@ -226,6 +404,10 @@ function sendChat(content: string): void {
   if (!text) {
     return;
   }
+  if (isDisabledGameCommand(text)) {
+    handleDisabledGameCommand();
+    return;
+  }
   sendEnvelope({
     action: "CHAT",
     body: {
@@ -233,6 +415,62 @@ function sendChat(content: string): void {
       msgType: "TEXT"
     }
   });
+  appendSystem(`已发送消息：${text}`);
+}
+
+function isDisabledGameCommand(content: string): boolean {
+  return disabledGameCommandPrefixes.some((prefix) => content.startsWith(prefix));
+}
+
+function handleDisabledGameCommand(): void {
+  const message = "游戏功能当前阶段不迁移，已统一禁用；聊天与连接功能可正常使用。";
+  appendSystem(message);
+  void vscode.window.showInformationMessage(message);
+}
+
+function notifyUnmigratableTool(toolName: string, unsupportedCapabilities: string, providedCapabilities: string): void {
+  const message = `${toolName}部分能力不可迁移：${unsupportedCapabilities}；当前支持：${providedCapabilities}。`;
+  appendSystem(message);
+  void vscode.window.showInformationMessage(message);
+}
+
+function parseWebUri(raw: string): vscode.Uri | undefined {
+  const value = raw.trim();
+  if (!value) {
+    return undefined;
+  }
+  const normalized = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(value) ? value : `https://${value}`;
+  try {
+    const target = vscode.Uri.parse(normalized);
+    if (target.scheme !== "http" && target.scheme !== "https") {
+      return undefined;
+    }
+    return target;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveFilePath(inputPath: string): string | undefined {
+  if (path.isAbsolute(inputPath)) {
+    return inputPath;
+  }
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (!workspaceFolder) {
+    return undefined;
+  }
+  return path.join(workspaceFolder.uri.fsPath, inputPath);
+}
+
+function getTextPreview(content: string): string {
+  const normalized = content.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "文件为空";
+  }
+  if (normalized.length <= 60) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 60)}...`;
 }
 
 function handleServerMessage(message: ChatResponse): void {
@@ -365,6 +603,8 @@ function appendSystem(content: string): void {
 }
 
 function updateStatus(state: string, content: string): void {
+  currentStatusState = state;
+  currentStatusContent = content;
   sendToWebview({
     type: "status",
     payload: {
@@ -378,6 +618,28 @@ function sendToWebview(data: unknown): void {
   if (panel) {
     void panel.webview.postMessage(data);
   }
+}
+
+function ensurePanel(context: vscode.ExtensionContext): void {
+  if (!panel) {
+    openPanel(context);
+  } else {
+    panel.reveal(vscode.ViewColumn.One);
+  }
+}
+
+function showHelp(): void {
+  appendSystem("可用命令：");
+  appendSystem("1. XEChat: 连接");
+  appendSystem("2. XEChat: 断开");
+  appendSystem("3. XEChat: 重连");
+  appendSystem("4. XEChat: 状态");
+  appendSystem("5. XEChat: 浏览器工具");
+  appendSystem("6. XEChat: 阅读工具");
+  appendSystem("7. XEChat: 帮助");
+  appendSystem("8. XEChat: 发送消息");
+  appendSystem("9. XEChat: 打开聊天");
+  appendSystem("10. XEChat: 游戏功能说明（当前阶段不迁移）");
 }
 
 function getWebviewHtml(webview: vscode.Webview): string {

@@ -11,7 +11,20 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:xechat.openChat"
+    "onCommand:xechat.openChat",
+    "onCommand:xechat.connect",
+    "onCommand:xechat.disconnect",
+    "onCommand:xechat.reconnect",
+    "onCommand:xechat.status",
+    "onCommand:xechat.openBrowserTool",
+    "onCommand:xechat.openReadTool",
+    "onCommand:xechat.help",
+    "onCommand:xechat.sendMessage",
+    "onCommand:xechat.gameDisabledInfo",
+    "onCommand:xechat.showGame",
+    "onCommand:xechat.play",
+    "onCommand:xechat.join",
+    "onCommand:xechat.overGame"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -19,6 +32,58 @@
       {
         "command": "xechat.openChat",
         "title": "XEChat: 打开聊天"
+      },
+      {
+        "command": "xechat.connect",
+        "title": "XEChat: 连接"
+      },
+      {
+        "command": "xechat.disconnect",
+        "title": "XEChat: 断开"
+      },
+      {
+        "command": "xechat.reconnect",
+        "title": "XEChat: 重连"
+      },
+      {
+        "command": "xechat.status",
+        "title": "XEChat: 状态"
+      },
+      {
+        "command": "xechat.openBrowserTool",
+        "title": "XEChat: 浏览器工具"
+      },
+      {
+        "command": "xechat.openReadTool",
+        "title": "XEChat: 阅读工具"
+      },
+      {
+        "command": "xechat.help",
+        "title": "XEChat: 帮助"
+      },
+      {
+        "command": "xechat.sendMessage",
+        "title": "XEChat: 发送消息"
+      },
+      {
+        "command": "xechat.gameDisabledInfo",
+        "title": "XEChat: 游戏功能说明（当前阶段不迁移）"
+      },
+      {
+        "command": "xechat.showGame",
+        "title": "XEChat: 游戏列表（已禁用）"
+      },
+      {
+        "command": "xechat.play",
+        "title": "XEChat: 开始游戏（已禁用）"
+      },
+      {
+        "command": "xechat.join",
+        "title": "XEChat: 加入游戏（已禁用）"
+      },
+      {
+        "command": "xechat.overGame",
+        "title": "XEChat: 结束游戏（已禁用）"
       }
     ],
     "configuration": {
